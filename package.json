@@ -1,0 +1,8 @@
+{
+  "scripts": {
+    "build": "./gradlew build",
+    "test": "./gradlew test",
+    "start": "./gradlew run",
+    "clean": "./gradlew clean"
+  }
+}
