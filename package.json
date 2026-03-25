@@ -1,8 +1,8 @@
 {
   "scripts": {
     "build": "./gradlew build",
+    "start": "java -cp \"$(./gradlew -q printClasspath)\" nl.vu.cs.softwaredesign.Main",
     "test": "./gradlew test",
-    "start": "./gradlew run",
     "clean": "./gradlew clean"
   }
 }

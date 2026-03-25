@@ -28,3 +28,11 @@ build/
 
 # All contents of the out folder
 out/
+
+# Slop
+.metals
+.bloop
+.vscode
+.classpath
+.project
+.settings/

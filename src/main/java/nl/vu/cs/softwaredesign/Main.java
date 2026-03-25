@@ -1,9 +1,11 @@
 package nl.vu.cs.softwaredesign;
 
-public class Main {
-    public void helper() {}
+import java.io.IOException;
 
-    public static void main (String[] args) {
-        System.out.println("Welcome to Software Design!");
+public class Main {
+
+    public static void main(String[] args) throws IOException {
+        City city = CityCli.loadCity(args);
+        new CityCli(city).run();
     }
 }

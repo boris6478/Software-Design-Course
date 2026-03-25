@@ -1,12 +1,35 @@
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+
 plugins {
     id 'java'
+    id 'application'
+    id 'eclipse'
 }
 
-group 'org.example'
-version '1.0-SNAPSHOT'
+group = 'org.example'
+version = '1.0-SNAPSHOT'
 
 java {
     sourceCompatibility = JavaVersion.VERSION_25
+}
+
+application {
+    mainClass = 'nl.vu.cs.softwaredesign.Main'
+}
+
+/** Used by npm `start` so stdin is attached directly to the JVM (Gradle `run` does not forward pipes reliably). */
+tasks.register('printClasspath') {
+    dependsOn classes
+    group = 'application'
+    description = 'Print runtime classpath (colon-separated) for manual java -cp'
+    doLast {
+        println sourceSets.main.runtimeClasspath.asPath
+    }
+}
+
+tasks.named('run', JavaExec).configure {
+    standardInput = System.in
 }
 
 repositories {
@@ -14,16 +37,55 @@ repositories {
 }
 
 dependencies {
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.18.2")
     testImplementation(platform("org.junit:junit-bom:6.0.2"))
     testImplementation("org.junit.jupiter:junit-jupiter")
 }
 
 jar {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     manifest {
         attributes "Main-Class": "nl.vu.cs.softwaredesign.Main"
     }
 
     from {
         configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+}
+
+// Metals/Bloop export often omits newer Gradle deps (e.g. Jackson). Merge the real
+// compile classpath into `.bloop/<rootProject.name>.json` so Bloop sees those JARs.
+tasks.register('patchBloopClasspath') {
+    group = 'ide'
+    description = 'Add missing compileClasspath modules to .bloop JSON (fixes Jackson / Bloop errors in Metals)'
+    inputs.files(configurations.compileClasspath)
+    doLast {
+        def bloopFile = file("${rootDir}/.bloop/${rootProject.name}.json")
+        if (!bloopFile.exists()) {
+            logger.lifecycle('patchBloopClasspath: {} not found — run Metals: Import build first, then re-run this task.', bloopFile)
+            return
+        }
+        def json = new JsonSlurper().parse(bloopFile)
+        def modules = json.project.resolution.modules
+        def existingKeys = new HashSet<String>()
+        modules.each { m ->
+            existingKeys.add("${m.organization}:${m.name}")
+        }
+        configurations.compileClasspath.resolvedConfiguration.resolvedArtifacts.each { ra ->
+            def mid = ra.moduleVersion.id
+            def key = "${mid.group}:${mid.name}"
+            if (existingKeys.contains(key)) {
+                return
+            }
+            existingKeys.add(key)
+            modules.add([
+                organization: mid.group,
+                name       : mid.name,
+                version    : mid.version,
+                artifacts  : [[name: mid.name, path: ra.file.absolutePath]]
+            ])
+        }
+        bloopFile.text = JsonOutput.prettyPrint(JsonOutput.toJson(json))
+        logger.lifecycle('Updated {} with compileClasspath entries.', bloopFile.name)
     }
 }
